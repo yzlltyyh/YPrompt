@@ -1,41 +1,119 @@
 <template>
-  <div class="h-full flex flex-col overflow-hidden p-2">
-    <!-- 模块特定顶栏 -->
+  <div class="h-full flex flex-col overflow-hidden p-2 playground-container">
+    <SettingsModal />
+    <SystemPromptModal
+      :is-open="showSystemPromptModal"
+      v-model="systemPromptDraft"
+      :title="'设置系统提示词'"
+      @close="showSystemPromptModal = false"
+      @save="handleSystemPromptSave"
+    />
+
     <div class="bg-white rounded-lg shadow-sm p-4 mb-4 flex-shrink-0">
-      <div class="flex items-center justify-between">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div class="min-w-0">
-          <h1 class="text-xl lg:text-2xl font-bold text-gray-800 mb-1">提示词操练场</h1>
-          <p class="text-sm lg:text-base text-gray-600">提示词测试与调试平台</p>
+          <h1 class="text-xl lg:text-2xl font-bold text-gray-900">提示词操练场</h1>
+          <p class="text-sm text-gray-500">实时调试提示词、网页、图表与可视化 Artifact</p>
         </div>
-        <div class="flex items-center gap-2">
-          <button 
-            @click="settingsStore.showSettings = true"
-            class="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <span class="text-lg">⚙️</span>
-          </button>
+        <div class="flex items-center gap-3 flex-wrap lg:flex-nowrap">
+          <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <label class="text-sm font-medium text-gray-700 whitespace-nowrap">AI模型:</label>
+            <select
+              v-model="settingsStore.selectedProvider"
+              @change="onProviderChange"
+              class="px-3 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 min-w-[160px]"
+            >
+              <option value="">选择提供商</option>
+              <option
+                v-for="provider in availableProviders"
+                :key="provider.id"
+                :value="provider.id"
+              >
+                {{ provider.name }}
+              </option>
+            </select>
+            <select
+              v-model="settingsStore.selectedModel"
+              @change="settingsStore.saveSettings"
+              :disabled="!settingsStore.selectedProvider"
+              class="px-3 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 disabled:opacity-50 min-w-[160px]"
+            >
+              <option value="">选择模型</option>
+              <option
+                v-for="model in availableModels"
+                :key="model.id"
+                :value="model.id"
+              >
+                {{ model.name }}
+              </option>
+            </select>
+          </div>
         </div>
       </div>
     </div>
-    
-    <!-- 空白内容区域 -->
-    <div class="flex-1 flex items-center justify-center bg-white rounded-lg shadow-sm">
-      <div class="text-center">
-        <svg class="w-16 h-16 mb-4 text-gray-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-        </svg>
-        <h2 class="text-2xl font-bold text-gray-800 mb-2">操练场</h2>
-        <p class="text-gray-600 max-w-md">
-          提示词实时测试与调试功能正在开发中<br>
-          即将为您提供专业的测试环境
-        </p>
-      </div>
+
+    <div class="flex-1 min-h-0">
+      <PlaygroundApp
+        :system-prompt="systemPrompt"
+        @open-system-prompt="openSystemPromptModal"
+      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import PlaygroundApp from '@/components/playground/PlaygroundApp.js'
+import SystemPromptModal from '@/components/modules/optimize/components/SystemPromptModal.vue'
+import SettingsModal from '@/components/settings/SettingsModal.vue'
+import '@/utils/playgroundGlobals'
+import '@/style/playground.css'
 import { useSettingsStore } from '@/stores/settingsStore'
 
 const settingsStore = useSettingsStore()
+
+const availableProviders = computed(() => settingsStore.getAvailableProviders())
+const availableModels = computed(() => {
+  if (!settingsStore.selectedProvider) return []
+  return settingsStore.getAvailableModels(settingsStore.selectedProvider)
+})
+
+const onProviderChange = () => {
+  settingsStore.selectedModel = ''
+  const models = availableModels.value
+  if (models.length > 0) {
+    settingsStore.selectedModel = models[0].id
+  }
+  settingsStore.saveSettings()
+}
+
+const STORAGE_KEY = 'yprompt_playground_system_prompt'
+const systemPrompt = ref('')
+const systemPromptDraft = ref('')
+const showSystemPromptModal = ref(false)
+
+if (typeof window !== 'undefined') {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved) {
+      systemPrompt.value = saved
+    }
+  } catch (error) {
+    console.warn('加载系统提示词失败', error)
+  }
+}
+
+watch(systemPrompt, (value) => {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(STORAGE_KEY, value)
+})
+
+const openSystemPromptModal = () => {
+  systemPromptDraft.value = systemPrompt.value
+  showSystemPromptModal.value = true
+}
+
+const handleSystemPromptSave = () => {
+  systemPrompt.value = systemPromptDraft.value
+}
 </script>
